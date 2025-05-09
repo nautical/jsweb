@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -20,73 +21,82 @@ func installPlaywrightBrowsers() error {
 }
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintf(os.Stderr, "Usage: jsweb <url>\n")
+	// Parse command line flags
+	forceUpdate := flag.Bool("force-update", false, "Force update of gitleaks configuration")
+	flag.Parse()
+
+	// Get URL from command line arguments
+	args := flag.Args()
+	if len(args) != 1 {
+		fmt.Fprintf(os.Stderr, "Usage: jsweb [--force-update] <url>\n")
 		os.Exit(1)
 	}
+	url := args[0]
 
 	if err := installPlaywrightBrowsers(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error installing Playwright browsers: %v\n", err)
 		os.Exit(1)
 	}
 
-	url := os.Args[1]
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "https://" + url
 	}
 
-	cfg, err := config.LoadConfig()
+	// Load configuration
+	cfg, err := config.LoadConfig(*forceUpdate)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading config: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error loading configuration: %v\n", err)
 		os.Exit(1)
 	}
 
-	scanner := scanner.NewScanner(cfg)
+	// Create scanner
+	s := scanner.NewScanner(cfg)
 
+	// Initialize Playwright
 	pw, err := playwright.Run()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error starting Playwright: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error initializing Playwright: %v\n", err)
 		os.Exit(1)
 	}
+	defer pw.Stop()
 
+	// Create browser
 	browser, err := pw.Chromium.Launch()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error launching browser: %v\n", err)
 		os.Exit(1)
 	}
+	defer browser.Close()
 
+	// Create page
 	page, err := browser.NewPage()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating new page: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error creating page: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Navigate to URL
 	if _, err := page.Goto(url); err != nil {
 		fmt.Fprintf(os.Stderr, "Error navigating to URL: %v\n", err)
 		os.Exit(1)
 	}
 
-	jsFiles, err := scanner.FindJSFiles(page)
+	// Find JavaScript files
+	jsFiles, err := s.FindJSFiles(page)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error finding JS files: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error finding JavaScript files: %v\n", err)
 		os.Exit(1)
 	}
 
+	// Check each file for secrets
 	for _, jsFile := range jsFiles {
-		if err := scanner.CheckFileForSecrets(jsFile); err != nil {
+		if err := s.CheckFileForSecrets(jsFile); err != nil {
 			fmt.Fprintf(os.Stderr, "Error checking file %s: %v\n", jsFile, err)
 		}
 	}
 
-	if err := browser.Close(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error closing browser: %v\n", err)
-	}
-	if err := pw.Stop(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error stopping Playwright: %v\n", err)
-	}
-
-	// Print findings in JSON format
-	if err := scanner.PrintFindings(); err != nil {
+	// Print findings
+	if err := s.PrintFindings(); err != nil {
 		fmt.Fprintf(os.Stderr, "Error printing findings: %v\n", err)
 		os.Exit(1)
 	}

@@ -7,7 +7,9 @@ import (
 	"math"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -37,8 +39,58 @@ type Scanner struct {
 	findings []Finding
 }
 
+// getPlaywrightCacheDir returns the platform-specific Playwright cache directory
+func getPlaywrightCacheDir() (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		return filepath.Join(homeDir, "AppData", "Local", "ms-playwright"), nil
+	case "darwin":
+		return filepath.Join(homeDir, "Library", "Caches", "ms-playwright"), nil
+	default: // linux and others
+		return filepath.Join(homeDir, ".cache", "ms-playwright"), nil
+	}
+}
+
+// areBrowsersInstalled checks if Playwright browsers are already installed
+func areBrowsersInstalled() bool {
+	cacheDir, err := getPlaywrightCacheDir()
+	if err != nil {
+		return false
+	}
+
+	// Check for the cache directory that Playwright uses
+	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		return false
+	}
+
+	// Check for at least one browser
+	browsers := []string{"chromium", "firefox", "webkit"}
+	for _, browser := range browsers {
+		browserPath := filepath.Join(cacheDir, browser)
+		if _, err := os.Stat(browserPath); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 // NewScanner creates a new Scanner instance
 func NewScanner(cfg *config.Config) *Scanner {
+	// Only show browser download message if browsers are not installed
+	if !areBrowsersInstalled() {
+		fmt.Println("Downloading browsers...")
+		if err := playwright.Install(); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to install browsers: %v\n", err)
+		} else {
+			fmt.Println("Downloaded browsers successfully")
+		}
+	}
+
 	return &Scanner{
 		config:   cfg,
 		findings: make([]Finding, 0),
