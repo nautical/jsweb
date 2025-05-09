@@ -12,14 +12,6 @@ import (
 	"github.com/playwright-community/playwright-go"
 )
 
-func installPlaywrightBrowsers() error {
-	err := playwright.Install()
-	if err != nil {
-		return fmt.Errorf("could not install playwright browsers: %v", err)
-	}
-	return nil
-}
-
 func main() {
 	// Parse command line flags
 	forceUpdate := flag.Bool("force-update", false, "Force update of gitleaks configuration")
@@ -32,11 +24,6 @@ func main() {
 		os.Exit(1)
 	}
 	url := args[0]
-
-	if err := installPlaywrightBrowsers(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error installing Playwright browsers: %v\n", err)
-		os.Exit(1)
-	}
 
 	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
 		url = "https://" + url

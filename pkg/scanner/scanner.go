@@ -60,20 +60,31 @@ func getPlaywrightCacheDir() (string, error) {
 func areBrowsersInstalled() bool {
 	cacheDir, err := getPlaywrightCacheDir()
 	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to get cache dir: %v\n", err)
 		return false
 	}
 
 	// Check for the cache directory that Playwright uses
 	if _, err := os.Stat(cacheDir); os.IsNotExist(err) {
+		fmt.Fprintf(os.Stderr, "Cache directory not found: %s\n", cacheDir)
 		return false
 	}
 
 	// Check for at least one browser
 	browsers := []string{"chromium", "firefox", "webkit"}
 	for _, browser := range browsers {
-		browserPath := filepath.Join(cacheDir, browser)
-		if _, err := os.Stat(browserPath); err == nil {
-			return true
+		// List all directories in the cache directory
+		entries, err := os.ReadDir(cacheDir)
+		if err != nil {
+			continue
+		}
+
+		// Check if any directory starts with the browser name
+		for _, entry := range entries {
+			if entry.IsDir() && strings.HasPrefix(entry.Name(), browser) {
+				// Found a browser directory
+				return true
+			}
 		}
 	}
 	return false
@@ -81,7 +92,7 @@ func areBrowsersInstalled() bool {
 
 // NewScanner creates a new Scanner instance
 func NewScanner(cfg *config.Config) *Scanner {
-	// Only show browser download message if browsers are not installed
+	// Only install browsers if they're not already present
 	if !areBrowsersInstalled() {
 		fmt.Println("Downloading browsers...")
 		if err := playwright.Install(); err != nil {
