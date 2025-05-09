@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"github.com/BurntSushi/toml"
 )
@@ -52,21 +53,34 @@ type Config struct {
 
 // LoadConfig loads the configuration from file or downloads it if not present
 func LoadConfig() (*Config, error) {
-	if _, err := os.Stat("gitleaks.toml"); os.IsNotExist(err) {
-		if err := downloadGitleaksConfig(); err != nil {
+	// Get user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get home directory: %v", err)
+	}
+
+	// Create .jsweb directory if it doesn't exist
+	jswebDir := filepath.Join(homeDir, ".jsweb")
+	if err := os.MkdirAll(jswebDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create .jsweb directory: %v", err)
+	}
+
+	configPath := filepath.Join(jswebDir, "gitleaks.toml")
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		if err := downloadGitleaksConfig(configPath); err != nil {
 			return nil, err
 		}
 	}
 
 	var config Config
-	if _, err := toml.DecodeFile("gitleaks.toml", &config); err != nil {
+	if _, err := toml.DecodeFile(configPath, &config); err != nil {
 		return nil, fmt.Errorf("failed to decode TOML: %v", err)
 	}
 	return &config, nil
 }
 
 // downloadGitleaksConfig downloads the official Gitleaks configuration
-func downloadGitleaksConfig() error {
+func downloadGitleaksConfig(configPath string) error {
 	url := "https://raw.githubusercontent.com/gitleaks/gitleaks/master/config/gitleaks.toml"
 	resp, err := http.Get(url)
 	if err != nil {
@@ -74,7 +88,7 @@ func downloadGitleaksConfig() error {
 	}
 	defer resp.Body.Close()
 
-	out, err := os.Create("gitleaks.toml")
+	out, err := os.Create(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to create file: %v", err)
 	}

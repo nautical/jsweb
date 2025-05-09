@@ -1,4 +1,4 @@
-module jsweb
+module github.com/nautical/jsweb
 
 go 1.19
 

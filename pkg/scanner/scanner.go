@@ -8,11 +8,12 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 
-	"jsweb/pkg/config"
-	"jsweb/pkg/utils"
+	"github.com/nautical/jsweb/pkg/config"
+	"github.com/nautical/jsweb/pkg/utils"
 
 	"github.com/playwright-community/playwright-go"
 )
@@ -51,6 +52,11 @@ func (s *Scanner) GetFindings() []Finding {
 
 // PrintFindings prints all findings in JSON format
 func (s *Scanner) PrintFindings() error {
+	// Sort findings by entropy in descending order
+	sort.Slice(s.findings, func(i, j int) bool {
+		return s.findings[i].Entropy > s.findings[j].Entropy
+	})
+
 	output := struct {
 		Findings []Finding `json:"findings"`
 	}{
