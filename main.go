@@ -5,8 +5,8 @@ import (
 	"os"
 	"strings"
 
-	"jsweb/pkg/config"
-	"jsweb/pkg/scanner"
+	"github.com/nautical/jsweb/pkg/config"
+	"github.com/nautical/jsweb/pkg/scanner"
 
 	"github.com/playwright-community/playwright-go"
 )
