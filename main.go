@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -10,6 +11,13 @@ import (
 	"github.com/nautical/jsweb/pkg/scanner"
 
 	"github.com/playwright-community/playwright-go"
+)
+
+// Version information - these variables are set during build using ldflags
+var (
+	Version   = "dev"
+	BuildDate = "unknown"
+	GitCommit = "unknown"
 )
 
 // Custom flag type for headers
@@ -24,27 +32,74 @@ func (h *headerFlag) Set(value string) error {
 	return nil
 }
 
+// validateURL checks if the provided string is a valid URL
+func validateURL(rawURL string) (string, error) {
+	// Add https:// prefix if no scheme is provided
+	if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+		rawURL = "https://" + rawURL
+	}
+
+	// Parse the URL to validate it
+	parsedURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %v", err)
+	}
+
+	// Check for required components
+	if parsedURL.Hostname() == "" {
+		return "", fmt.Errorf("URL must contain a hostname")
+	}
+
+	return rawURL, nil
+}
+
+// printUsage prints detailed usage information
+func printUsage() {
+	fmt.Fprintf(os.Stderr, "JSWeb - JavaScript Secret Scanner %s\n\n", Version)
+	fmt.Fprintf(os.Stderr, "Usage: jsweb [options] <url>\n\n")
+	fmt.Fprintf(os.Stderr, "Options:\n")
+	flag.PrintDefaults()
+	fmt.Fprintf(os.Stderr, "\nExamples:\n")
+	fmt.Fprintf(os.Stderr, "  jsweb example.com\n")
+	fmt.Fprintf(os.Stderr, "  jsweb --force-update example.com\n")
+	fmt.Fprintf(os.Stderr, "  jsweb --header 'Authorization: Bearer token123' example.com\n")
+	fmt.Fprintf(os.Stderr, "  jsweb --cookies 'session=abc123; user=john' example.com\n")
+}
+
 func main() {
 	// Parse command line flags
 	forceUpdate := flag.Bool("force-update", false, "Force update of gitleaks configuration")
+	showVersion := flag.Bool("version", false, "Show version information")
 
 	// Define custom flag for headers
 	var headers headerFlag
 	flag.Var(&headers, "header", "Custom header in format 'Name: Value'. Can be specified multiple times")
 
 	cookies := flag.String("cookies", "", "Cookies in format 'name=value; name2=value2'")
+
+	// Set custom usage function
+	flag.Usage = printUsage
+
 	flag.Parse()
+
+	// Show version if requested
+	if *showVersion {
+		fmt.Printf("JSWeb - JavaScript Secret Scanner\nVersion: %s\nBuild Date: %s\nGit Commit: %s\n", Version, BuildDate, GitCommit)
+		os.Exit(0)
+	}
 
 	// Get URL from command line arguments
 	args := flag.Args()
 	if len(args) != 1 {
-		fmt.Fprintf(os.Stderr, "Usage: jsweb [--force-update] [--header 'Name: Value'] [--cookies 'name=value; name2=value2'] <url>\n")
+		printUsage()
 		os.Exit(1)
 	}
-	url := args[0]
 
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		url = "https://" + url
+	// Validate the URL
+	url, err := validateURL(args[0])
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
 	}
 
 	// Load configuration

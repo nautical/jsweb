@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -e
 
 # Check if version is provided
 if [[ -z "$1" ]]; then
@@ -22,8 +23,46 @@ if ! gh auth status &> /dev/null; then
     exit 1
 fi
 
-# Build the binaries first
-./build.sh
+# Get commit information
+COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+# Create dist directory
+mkdir -p dist
+
+# Build for different platforms with version information
+build() {
+    local GOOS=$1
+    local GOARCH=$2
+    local output_name="jsweb"
+    
+    if [ "$GOOS" = "windows" ]; then
+        output_name="${output_name}.exe"
+    fi
+    
+    echo "Building for $GOOS/$GOARCH..."
+    
+    # Build with version information embedded via ldflags
+    GOOS=$GOOS GOARCH=$GOARCH go build \
+        -ldflags "-X main.Version=$VERSION -X main.BuildDate=$BUILD_DATE -X main.GitCommit=$COMMIT" \
+        -o "dist/${GOOS}_${GOARCH}/${output_name}" \
+        ./...
+    
+    # Create zip archive for the platform
+    pushd dist/${GOOS}_${GOARCH} > /dev/null
+    zip -q ../../dist/jsweb-${VERSION}-${GOOS}-${GOARCH}.zip ${output_name}
+    popd > /dev/null
+    
+    echo "✓ Built and packaged dist/jsweb-${VERSION}-${GOOS}-${GOARCH}.zip"
+}
+
+# Build for all platforms
+echo "Building release $VERSION (commit: $COMMIT, date: $BUILD_DATE)..."
+build "darwin" "amd64"
+build "darwin" "arm64"
+build "linux" "amd64"
+build "linux" "arm64"
+build "windows" "amd64"
 
 # Create temporary file for release notes
 TEMP_NOTES=$(mktemp)
@@ -43,15 +82,19 @@ echo "- " >> "$TEMP_NOTES"
 # Open editor for release notes
 ${EDITOR:-vi} "$TEMP_NOTES"
 
+# Create git tag
+echo "Creating git tag $VERSION..."
+git tag -a "$VERSION" -m "Release $VERSION"
+git push origin "$VERSION"
+
 # Create the release
-echo "Creating release $VERSION..."
+echo "Creating GitHub release $VERSION..."
 gh release create "$VERSION" \
     --repo nautical/jsweb \
     --title "Release $VERSION" \
     --notes-file "$TEMP_NOTES" \
-    build/*
+    dist/jsweb-${VERSION}-*.zip
 
 # Clean up
 rm "$TEMP_NOTES"
-
 echo "Release $VERSION has been created successfully!" 

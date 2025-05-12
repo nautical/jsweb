@@ -1,23 +1,17 @@
-#!/usr/bin/env bash
+#!/bin/bash
+set -e
 
-# Create build directory if it doesn't exist
-mkdir -p build
+# This is a simple build script for development
+# For releases with proper version information, use release.sh
 
-platforms=("windows/amd64" "windows/386" "darwin/amd64")
+# Create dist directory
+mkdir -p dist/dev
 
-for platform in "${platforms[@]}"
-do
-	platform_split=(${platform//\// })
-	GOOS=${platform_split[0]}
-	GOARCH=${platform_split[1]}
-	output_name="jsweb-$GOOS-$GOARCH"
-	if [ $GOOS = "windows" ]; then
-		output_name+='.exe'
-	fi	
+# Build for current platform
+echo "Building development version..."
+go build \
+	-o "dist/dev/jsweb" \
+	./...
 
-	env GOOS=$GOOS GOARCH=$GOARCH go build -o build/$output_name
-	if [ $? -ne 0 ]; then
-   		echo 'An error has occurred! Aborting the script execution...'
-		exit 1
-	fi
-done
+echo "✓ Built dist/dev/jsweb"
+echo "For production builds with versioning, use ./release.sh <version>"
