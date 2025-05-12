@@ -37,6 +37,8 @@ type Finding struct {
 type Scanner struct {
 	config   *config.Config
 	findings []Finding
+	headers  http.Header
+	cookies  string
 }
 
 // getPlaywrightCacheDir returns the platform-specific Playwright cache directory
@@ -92,6 +94,31 @@ func areBrowsersInstalled() bool {
 
 // NewScanner creates a new Scanner instance
 func NewScanner(cfg *config.Config) *Scanner {
+	return NewScannerWithOptions(cfg, nil, "")
+}
+
+// NewScannerWithOptions creates a new Scanner instance with custom headers and cookies
+func NewScannerWithOptions(cfg *config.Config, headers []string, cookiesStr string) *Scanner {
+	// Initialize scanner
+	s := &Scanner{
+		config:   cfg,
+		findings: make([]Finding, 0),
+		cookies:  cookiesStr,
+	}
+
+	// Parse headers
+	s.headers = make(http.Header)
+	for _, headerStr := range headers {
+		if headerStr == "" {
+			continue
+		}
+
+		headerParts := strings.SplitN(headerStr, ": ", 2)
+		if len(headerParts) == 2 {
+			s.headers.Add(headerParts[0], headerParts[1])
+		}
+	}
+
 	// Only install browsers if they're not already present
 	if !areBrowsersInstalled() {
 		fmt.Println("Downloading browsers...")
@@ -102,10 +129,7 @@ func NewScanner(cfg *config.Config) *Scanner {
 		}
 	}
 
-	return &Scanner{
-		config:   cfg,
-		findings: make([]Finding, 0),
-	}
+	return s
 }
 
 // GetFindings returns all findings
@@ -334,7 +358,30 @@ func (s *Scanner) CheckFileForSecrets(url string) error {
 	// Add rate limiting
 	time.Sleep(100 * time.Millisecond)
 
-	resp, err := http.Get(url)
+	// Create request with headers
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+
+	// Set headers
+	for key, values := range s.headers {
+		for _, value := range values {
+			req.Header.Add(key, value)
+		}
+	}
+
+	// Set cookies
+	if s.cookies != "" {
+		req.Header.Add("Cookie", s.cookies)
+	}
+
+	// Set common headers
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+
+	// Send request
+	client := &http.Client{}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("failed to fetch JS file: %v", err)
 	}
