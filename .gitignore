@@ -1,6 +1,6 @@
 # Build directory
 /build/
-
+dist/
 # Binaries for programs and plugins
 *.exe
 *.exe~

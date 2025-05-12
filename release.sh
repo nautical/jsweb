@@ -42,11 +42,14 @@ build() {
     
     echo "Building for $GOOS/$GOARCH..."
     
+    # Ensure the output directory exists
+    mkdir -p "dist/${GOOS}_${GOARCH}"
+    
     # Build with version information embedded via ldflags
     GOOS=$GOOS GOARCH=$GOARCH go build \
         -ldflags "-X main.Version=$VERSION -X main.BuildDate=$BUILD_DATE -X main.GitCommit=$COMMIT" \
         -o "dist/${GOOS}_${GOARCH}/${output_name}" \
-        ./...
+        .
     
     # Create zip archive for the platform
     pushd dist/${GOOS}_${GOARCH} > /dev/null
@@ -59,9 +62,7 @@ build() {
 # Build for all platforms
 echo "Building release $VERSION (commit: $COMMIT, date: $BUILD_DATE)..."
 build "darwin" "amd64"
-build "darwin" "arm64"
 build "linux" "amd64"
-build "linux" "arm64"
 build "windows" "amd64"
 
 # Create temporary file for release notes
